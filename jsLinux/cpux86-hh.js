@@ -23,7 +23,8 @@ var ca = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 1, 2,
 		3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 var da = [0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4,
 		5, 6, 7, 8, 0, 1, 2, 3, 4];
-function XX()
+		
+function ea()
 {
     var i, fa;
     this.regs = new Array();
@@ -231,6 +232,7 @@ function ta(n)
 {
     return qa(n, 4);
 }
+
 ea.prototype.dump = function()
 {
     var i, ua, va;
@@ -271,6 +273,7 @@ ea.prototype.dump = function()
     va += "IDT=     " + ra(ua.base) + " " + ra(ua.limit);
     console.log(va);
 };
+
 ea.prototype.exec = function(xa)
 {
     var ya, ha, za;
@@ -7405,7 +7408,7 @@ ea.prototype.exec = function(xa)
     return Na;
 };
 
-// Load file into memmory
+// Load binary file into memory
 ea.prototype.load_binary = function(url, memAddress)
 {
     var xhr, fileContent, fileLength, i, bytesArray;
@@ -7653,7 +7656,8 @@ Se.prototype.ioport_write = function(ha, ia)
                     break;
             }
         }
-    } else
+    } 
+    else
     {
         switch (this.init_state)
         {
@@ -8394,6 +8398,7 @@ xf.prototype.register_ioport_read = function(start, fd, zf, Af)
             break;
     }
 };
+
 xf.prototype.register_ioport_write = function(start, fd, zf, Af)
 {
     var i;
@@ -8430,6 +8435,7 @@ xf.prototype.reset = function()
     this.request_request = 1;
 };
 var ya, Bf, Qe;
+
 function Cf()
 {
     var Na, Df, Ef, Ff, Gf;
@@ -8480,7 +8486,7 @@ function Jf(va)
     Qe.serial.send_chars(va);
 }
 
-//检查浏览器是否支持
+//检查浏览器是否支持typed array
 function isBrowserSupportTypedArray()
 {
     return (window.Uint8Array && window.Uint16Array && window.Int32Array && window.ArrayBuffer);
