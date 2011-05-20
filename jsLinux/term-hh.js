@@ -24,6 +24,7 @@ if (!Function.prototype.bind)
     };
 }
 
+//Constructor of Term
 function Term(width, height, ha)
 {
     this.w = width;

@@ -7582,6 +7582,7 @@ Se.prototype.intack = function(Ue)
     if (!(this.elcr & (1 << Ue)))
         this.irr &= ~(1 << Ue);
 };
+
 Se.prototype.ioport_write = function(ha, ia)
 {
     var Xe;
@@ -7597,13 +7598,15 @@ Se.prototype.ioport_write = function(ha, ia)
                 throw "single mode not supported";
             if (ia & 0x08)
                 throw "level sensitive irq not supported";
-        } else if (ia & 0x08)
+        } 
+        else if (ia & 0x08)
         {
             if (ia & 0x02)
                 this.read_reg_select = ia & 1;
             if (ia & 0x40)
                 this.special_mask = (ia >> 5) & 1;
-        } else
+        } 
+        else
         {
             switch (ia)
             {
@@ -7685,6 +7688,7 @@ Se.prototype.ioport_write = function(ha, ia)
         }
     }
 };
+
 Se.prototype.ioport_read = function(Ze)
 {
     var ha, He;
@@ -8046,7 +8050,8 @@ pf.prototype.ioport_write = function(ha, ia)
             if (this.lcr & 0x80)
             {
                 this.divider = (this.divider & 0xff00) | ia;
-            } else
+            } 
+            else
             {
                 this.lsr &= ~0x20;
                 this.update_irq();
@@ -8060,7 +8065,8 @@ pf.prototype.ioport_write = function(ha, ia)
             if (this.lcr & 0x80)
             {
                 this.divider = (this.divider & 0x00ff) | (ia << 8);
-            } else
+            } 
+            else
             {
                 this.ier = ia;
                 this.update_irq();
