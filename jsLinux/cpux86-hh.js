@@ -23,7 +23,7 @@ var ca = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 1, 2,
 		3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 var da = [0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4,
 		5, 6, 7, 8, 0, 1, 2, 3, 4];
-function XX()
+function ea()
 {
     var i, fa;
     this.regs = new Array();
@@ -208,25 +208,29 @@ ea.prototype.st8_N = function(ha, pa)
         this.st8_phys(ha + i, pa[i]);
     }
 };
-function qa(ia, n)
+//把数字转换成n位16进制格式，
+function qa(value, n)
 {
     var i, s;
     var h = "0123456789ABCDEF";
     s = "";
     for (i = n - 1; i >= 0; i--)
     {
-        s = s + h[(ia >>> (i * 4)) & 15];
+        s = s + h[(value >>> (i * 4)) & 15];
     }
     return s;
 }
+//得到8位16进制数
 function ra(n)
 {
     return qa(n, 8);
 }
+//得到2位16进制数
 function sa(n)
 {
     return qa(n, 2);
 }
+//得到4位16进制数
 function ta(n)
 {
     return qa(n, 4);
@@ -237,12 +241,15 @@ ea.prototype.dump = function()
     var wa = [" ES", " CS", " SS", " DS", " FS", " GS", "LDT", " TR"];
     console.log("TSC=" + ra(this.cycle_count) + " EIP=" + ra(this.eip)
 			+ "\nEAX=" + ra(this.regs[0]) + " ECX=" + ra(this.regs[1])
-			+ " EDX=" + ra(this.regs[2]) + " EBX=" + ra(this.regs[3]) + " ESP="
-			+ ra(this.regs[4]) + " EBP=" + ra(this.regs[5]));
+			+ " EDX=" + ra(this.regs[2]) + " EBX=" + ra(this.regs[3])
+            + " ESP=" + ra(this.regs[4]) + " EBP=" + ra(this.regs[5]));
+
     console.log("ESI=" + ra(this.regs[6]) + " EDI=" + ra(this.regs[7]));
+
     console.log("EFL=" + ra(this.eflags) + " OP=" + sa(this.cc_op) + " SRC="
 			+ ra(this.cc_src) + " DST=" + ra(this.cc_dst) + " OP2="
 			+ sa(this.cc_op2) + " DST2=" + ra(this.cc_dst2));
+
     console.log("CPL=" + this.cpl + " CR0=" + ra(this.cr0) + " CR2="
 			+ ra(this.cr2) + " CR3=" + ra(this.cr3) + " CR4=" + ra(this.cr4));
     va = "";
@@ -271,6 +278,7 @@ ea.prototype.dump = function()
     va += "IDT=     " + ra(ua.base) + " " + ra(ua.limit);
     console.log(va);
 };
+
 ea.prototype.exec = function(xa)
 {
     var ya, ha, za;
@@ -8471,11 +8479,11 @@ function Cf()
 // Terminal
 function initializeTerminal()
 {
-    //Jf是一个回调函数?
-    terminal = new Term(120, 75, Jf);
+    terminal = new Term(120, 75, keyboardHandler);
     terminal.open();
 }
-function Jf(va)
+//处理Terminal上的输入
+function keyboardHandler(va)
 {
     Qe.serial.send_chars(va);
 }
