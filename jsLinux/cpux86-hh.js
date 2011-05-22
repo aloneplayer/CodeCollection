@@ -209,7 +209,7 @@ ea.prototype.st8_N = function(ha, pa)
     }
 };
 //把数字转换成n位16进制格式，
-function qa(value, n)
+function converHex(value, n)
 {
     var i, s;
     var h = "0123456789ABCDEF";
@@ -223,18 +223,19 @@ function qa(value, n)
 //得到8位16进制数
 function ra(n)
 {
-    return qa(n, 8);
+    return converHex(n, 8);
 }
 //得到2位16进制数
 function sa(n)
 {
-    return qa(n, 2);
+    return converHex(n, 2);
 }
 //得到4位16进制数
 function ta(n)
 {
-    return qa(n, 4);
+    return converHex(n, 4);
 }
+//显示寄存器的值
 ea.prototype.dump = function()
 {
     var i, ua, va;
@@ -8146,6 +8147,7 @@ pf.prototype.send_break = function()
     this.update_irq();
 };
 
+//如何向VM发送字符
 pf.prototype.send_char = function(rf)
 {
     this.rbr = rf;

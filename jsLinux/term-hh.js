@@ -7,13 +7,18 @@ Redistribution or commercial use is prohibited without the author's
 permission.
 */
 "use strict";
+//
 if (!Function.prototype.bind)
 {
-    Function.prototype.bind = function(aa)
+    Function.prototype.bind = function (aa)
     {
-        var ba = [].slice, ca = ba.call(arguments, 1), self = this, da = function()
+        var ba = [].slice;
+        var ca = ba.call(arguments, 1);
+        var self = this;
+        var da = function ()
         {
-        }, ea = function()
+        };
+        var ea = function ()
         {
             return self.apply(this instanceof da ? this : (aa || {}), ca
 					.concat(ba.call(arguments)));
@@ -24,6 +29,7 @@ if (!Function.prototype.bind)
     };
 }
 
+//ha 函数把用户输入传递给VM
 function Term(width, height, ha)
 {
     this.w = width;
@@ -39,115 +45,122 @@ function Term(width, height, ha)
 			"#ff00ff", "#00ffff", "#ffffff"];
     this.fg_colors = ["#000000", "#ff0000", "#00ff00", "#ffff00", "#0000ff",
 			"#ff00ff", "#00ffff", "#ffffff"];
-    this.def_attr = (7 << 3) | 0;
+    this.def_attr = (7 << 3) | 0;    // default的字符属性为111000
     this.cur_attr = this.def_attr;
     this.is_mac = (navigator.userAgent.indexOf("Mac") >= 0) ? true : false;
 }
+
+//
 Term.prototype.open = function()
 {
     var y, ia, i, ja, c;
     this.lines = new Array();
-    c = 32 | (this.def_attr << 16);
+    c = 32 | (this.def_attr << 16);   //defatul attribute = 111000
     //逐行操作
     for (y = 0; y < this.h; y++)
     {
         ia = new Array();
-        for (i = 0; i < this.w; i++)
+        for (i = 0; i < this.w; i++)   //标记行中每个字符的状态
             ia[i] = c;
         this.lines[y] = ia;
     }
     document.writeln('<table border="0" cellspacing="0" cellpadding="0">');
-    //逐行操作
+    //向terminal table中添加row， td的id为 tliney
     for (y = 0; y < this.h; y++)
     {
         document.writeln('<tr><td class="term" id="tline' + y + '"></td></tr>');
     }
     document.writeln('</table>');
     
+    //刷新所有行,从0到h-1
     this.refresh(0, this.h - 1);
+
     document.addEventListener("keydown", this.keyDownHandler.bind(this), true);
     document.addEventListener("keypress", this.keyPressHandler.bind(this), true);
     ja = this;
-    //光标闪烁
+    //光标闪烁，每秒执行一次
     setInterval(function()
     {
         ja.cursor_timer_cb();
     }, 1000);
 };
 
-Term.prototype.refresh = function(ka, la)
+//刷新terminal,从第yStart行到yEnd行
+Term.prototype.refresh = function(yStart, yEnd)
 {
-    var ma, y, ia, na, c, w, i, oa, pa, qa, ra, sa;
-    for (y = ka; y <= la; y++)
+    var domTD, y, currentLine, innerHtml, c, w, i, cursorX, pa, qa, ra, sa;
+    for (y = yStart; y <= yEnd; y++)
     {
-        ia = this.lines[y];
-        na = "";
+        currentLine = this.lines[y];  //current line
+        innerHtml = "";
         w = this.w;
         if (y == this.y && this.cursor_state)
         {
-            oa = this.x;
-        } else
+            cursorX = this.x;
+        } 
+        else
         {
-            oa = -1;
+            cursorX = -1;
         }
         qa = this.def_attr;
-        for (i = 0; i < w; i++)
+        for (i = 0; i < w; i++)   //Porcess chars in current line
         {
-            c = ia[i];
+            c = currentLine[i];   //current char
             pa = c >> 16;
             c &= 0xffff;
-            if (i == oa)
+            if (i == cursorX)
             {
                 pa = -1;
             }
             if (pa != qa)
             {
                 if (qa != this.def_attr)
-                    na += '</span>';
+                    innerHtml += '</span>';
                 if (pa != this.def_attr)
                 {
                     if (pa == -1)
                     {
-                        na += '<span class="termReverse">';
+                        innerHtml += '<span class="termReverse">';
                     } else
                     {
-                        na += '<span style="';
+                        innerHtml += '<span style="';
                         ra = (pa >> 3) & 7;
                         sa = pa & 7;
                         if (ra != 7)
                         {
-                            na += 'color:' + this.fg_colors[ra] + ';';
+                            innerHtml += 'color:' + this.fg_colors[ra] + ';';
                         }
                         if (sa != 0)
                         {
-                            na += 'background-color:' + this.bg_colors[sa]
+                            innerHtml += 'background-color:' + this.bg_colors[sa]
 									+ ';';
                         }
-                        na += '">';
+                        innerHtml += '">';
                     }
                 }
             }
             switch (c)
             {
-                case 32:
-                    na += "&nbsp;";
+                case 32: // Space
+                    innerHtml += "&nbsp;";
                     break;
-                case 38:
-                    na += "&amp;";
+                case 38: //&
+                    innerHtml += "&amp;";
                     break;
-                case 60:
-                    na += "&lt;";
+                case 60: //<
+                    innerHtml += "&lt;";
                     break;
-                case 62:
-                    na += "&gt;";
+                case 62: //>
+                    innerHtml += "&gt;";
                     break;
                 default:
                     if (c < 32)
                     {
-                        na += "&nbsp;";
-                    } else
+                        innerHtml += "&nbsp;";
+                    } 
+                    else
                     {
-                        na += String.fromCharCode(c);
+                        innerHtml += String.fromCharCode(c);
                     }
                     break;
             }
@@ -155,11 +168,11 @@ Term.prototype.refresh = function(ka, la)
         }
         if (qa != this.def_attr)
         {
-            na += '</span>';
+            innerHtml += '</span>';
         }
-        ma = document.getElementById("tline" + y);
-        ma.innerHTML = na;
-    }
+        domTD = document.getElementById("tline" + y);
+        domTD.innerHTML = innerHtml;
+    } 
 };
 
 //光标闪烁
@@ -410,67 +423,71 @@ Term.prototype.writeln = function(message)
     this.write(message + '\r\n');
 };
 
+//处理按键输入，event.keyCode=按键的编码
 Term.prototype.keyDownHandler = function(Da)
 {
     var ta;
     ta = "";
     switch (Da.keyCode)
     {
-        case 8:
-            ta = "";
+        case 8:  //Backspace
+            ta = ""; 
             break;
-        case 9:
+        case 9:  //Tab
             ta = "\t";
             break;
-        case 13:
+        case 13:  //Enter
             ta = "\r";
             break;
-        case 27:
+        case 27:  //Esc 
             ta = "\x1b";
             break;
-        case 37:
+        case 37:  //left, ANSI Escape sequences 
             ta = "\x1b[D";
             break;
-        case 39:
+        case 39:  //right
             ta = "\x1b[C";
             break;
-        case 38:
+        case 38:  //Up
             ta = "\x1b[A";
             break;
-        case 40:
+        case 40:  //Down
             ta = "\x1b[B";
             break;
-        case 46:
+        case 46:  //Delete
             ta = "\x1b[3~";
             break;
-        case 45:
+        case 45:  //Inster
             ta = "\x1b[2~";
             break;
-        case 36:
+        case 36:   //Home
             ta = "\x1bOH";
             break;
-        case 35:
+        case 35:   //End
             ta = "\x1bOF";
             break;
-        case 33:
+        case 33:   //Page Up
             ta = "\x1b[5~";
             break;
-        case 34:
+        case 34:   //Page Down
             ta = "\x1b[6~";
             break;
         default:
             if (Da.ctrlKey)
             {
-                if (Da.keyCode >= 65 && Da.keyCode <= 90)
+                if (Da.keyCode >= 65 && Da.keyCode <= 90)  //control+A-Z
                 {
+                    // fromCharCode: Unicode to string
                     ta = String.fromCharCode(Da.keyCode - 64);
-                } else if (Da.keyCode == 32)
+                } 
+                else if (Da.keyCode == 32)   //space
                 {
                     ta = String.fromCharCode(0);
                 }
-            } else if ((!this.is_mac && Da.altKey) || (this.is_mac && Da.metaKey))
+            } 
+            else if ((!this.is_mac && Da.altKey) || (this.is_mac && Da.metaKey))   //Alt/CMD+ A-Z
             {
-                if (Da.keyCode >= 65 && Da.keyCode <= 90)
+                if (Da.keyCode >= 65 && Da.keyCode <= 90)   //A-Z
                 {
                     ta = "\x1b" + String.fromCharCode(Da.keyCode + 32);
                 }
@@ -484,14 +501,15 @@ Term.prototype.keyDownHandler = function(Da)
         if (Da.preventDefault)
             Da.preventDefault();
         this.show_cursor();
-        this.handler(ta);
+        this.handler(ta);    // Send key to VM
         return false;
-    } else
+    } 
+    else
     {
         return true;
     }
 };
-
+//处理字符输入,event.charCode
 Term.prototype.keyPressHandler = function(Da)
 {
     var ta;
@@ -511,7 +529,7 @@ Term.prototype.keyPressHandler = function(Da)
     if (ta)
     {
         this.show_cursor();
-        this.handler(ta);
+        this.handler(ta); // Send key to VM
         return false;
     }
     else
