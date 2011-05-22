@@ -45,7 +45,7 @@ function Term(width, height, ha)
 			"#ff00ff", "#00ffff", "#ffffff"];
     this.fg_colors = ["#000000", "#ff0000", "#00ff00", "#ffff00", "#0000ff",
 			"#ff00ff", "#00ffff", "#ffffff"];
-    this.def_attr = (7 << 3) | 0;    // default的字符属性为111000
+    this.def_attr = (7 << 3) | 0;    // default的字符属性为111000 , 高3位为fg_Color, 低3位为bg_Color
     this.cur_attr = this.def_attr;
     this.is_mac = (navigator.userAgent.indexOf("Mac") >= 0) ? true : false;
 }
@@ -55,12 +55,12 @@ Term.prototype.open = function()
 {
     var y, ia, i, ja, c;
     this.lines = new Array();
-    c = 32 | (this.def_attr << 16);   //defatul attribute = 111000
+    c = 32 | (this.def_attr << 16);   //defatul attribute = 111000 , 32=100000
     //逐行操作
     for (y = 0; y < this.h; y++)
     {
         ia = new Array();
-        for (i = 0; i < this.w; i++)   //标记行中每个字符的状态
+        for (i = 0; i < this.w; i++)   //initrialize行中每个字符, 低16位为字符，17-19位为背景色，21-22为前景色
             ia[i] = c;
         this.lines[y] = ia;
     }
@@ -88,7 +88,7 @@ Term.prototype.open = function()
 //刷新terminal,从第yStart行到yEnd行
 Term.prototype.refresh = function(yStart, yEnd)
 {
-    var domTD, y, currentLine, innerHtml, c, w, i, cursorX, pa, qa, ra, sa;
+    var domTD, y, currentLine, innerHtml, currentChar, w, i, cursorX, attribute, preAttribute, fgColor, bgColor;
     for (y = yStart; y <= yEnd; y++)
     {
         currentLine = this.lines[y];  //current line
@@ -102,44 +102,44 @@ Term.prototype.refresh = function(yStart, yEnd)
         {
             cursorX = -1;
         }
-        qa = this.def_attr;
+        preAttribute = this.def_attr;
         for (i = 0; i < w; i++)   //Porcess chars in current line
         {
-            c = currentLine[i];   //current char
-            pa = c >> 16;
-            c &= 0xffff;
+            currentChar = currentLine[i];   //current char
+            attribute = currentChar >> 16;
+            currentChar &= 0xffff;
             if (i == cursorX)
             {
-                pa = -1;
+                attribute = -1;
             }
-            if (pa != qa)
+            if (attribute != preAttribute)
             {
-                if (qa != this.def_attr)
+                if (preAttribute != this.def_attr)    //end of the <span> for the special style char
                     innerHtml += '</span>';
-                if (pa != this.def_attr)
+                if (attribute != this.def_attr)
                 {
-                    if (pa == -1)
+                    if (attribute == -1)
                     {
                         innerHtml += '<span class="termReverse">';
-                    } else
+                    } 
+                    else
                     {
                         innerHtml += '<span style="';
-                        ra = (pa >> 3) & 7;
-                        sa = pa & 7;
-                        if (ra != 7)
+                        fgColor = (attribute >> 3) & 7;    //attribute的高三位为前景色
+                        bgColor = attribute & 7;           //attribute的低三位为背景色
+                        if (fgColor != 7)
                         {
-                            innerHtml += 'color:' + this.fg_colors[ra] + ';';
+                            innerHtml += 'color:' + this.fg_colors[fgColor] + ';';
                         }
-                        if (sa != 0)
+                        if (bgColor != 0)
                         {
-                            innerHtml += 'background-color:' + this.bg_colors[sa]
-									+ ';';
+                            innerHtml += 'background-color:' + this.bg_colors[bgColor] + ';';
                         }
                         innerHtml += '">';
                     }
                 }
             }
-            switch (c)
+            switch (currentChar)
             {
                 case 32: // Space
                     innerHtml += "&nbsp;";
@@ -154,19 +154,19 @@ Term.prototype.refresh = function(yStart, yEnd)
                     innerHtml += "&gt;";
                     break;
                 default:
-                    if (c < 32)
+                    if (currentChar < 32)
                     {
                         innerHtml += "&nbsp;";
                     } 
                     else
                     {
-                        innerHtml += String.fromCharCode(c);
+                        innerHtml += String.fromCharCode(currentChar);
                     }
                     break;
             }
-            qa = pa;
-        }
-        if (qa != this.def_attr)
+            preAttribute = attribute;
+        }  // Endof  process every char
+        if (preAttribute != this.def_attr)
         {
             innerHtml += '</span>';
         }
@@ -200,57 +200,22 @@ Term.prototype.scroll = function()
     c = 32 | (this.def_attr << 16);
     ia = new Array();
     for (x = 0; x < this.w; x++)
-        ia[x] = c;
+        ia[x] = c;   // Build a empty line
     this.lines[this.h - 1] = ia;
 };
 
+//Write string
 Term.prototype.write = function(ta)
 {
-    function ua(y)
-    {
-        ka = Math.min(ka, y);
-        la = Math.max(la, y);
-    }
-    function va(s, x, y)
-    {
-        var l, i, c;
-        l = s.lines[y];
-        c = 32 | (s.def_attr << 16);
-        for (i = x; i < s.w; i++)
-            l[i] = c;
-        ua(y);
-    }
-    function wa(s, xa)
-    {
-        var j, n;
-        if (xa.length == 0)
-        {
-            s.cur_attr = s.def_attr;
-        } else
-        {
-            for (j = 0; j < xa.length; j++)
-            {
-                n = xa[j];
-                if (n >= 30 && n <= 37)
-                {
-                    s.cur_attr = (s.cur_attr & ~(7 << 3)) | ((n - 30) << 3);
-                } else if (n >= 40 && n <= 47)
-                {
-                    s.cur_attr = (s.cur_attr & ~7) | (n - 40);
-                } else if (n == 0)
-                {
-                    s.cur_attr = s.def_attr;
-                }
-            }
-        }
-    }
     var ya = 0;
     var za = 1;
     var Aa = 2;
     var i, c, ka, la, l, n, j;
+
     ka = this.h;
     la = -1;
-    ua(this.y);
+    ua(this.y);  
+   
     for (i = 0; i < ta.length; i++)
     {
         c = ta.charCodeAt(i);
@@ -330,7 +295,8 @@ Term.prototype.write = function(ta)
                 if (c >= 48 && c <= 57)
                 {
                     this.cur_param = this.cur_param * 10 + c - 48;
-                } else
+                } 
+                else
                 {
                     this.esc_params[this.esc_params.length] = this.cur_param;
                     this.cur_param = 0;
@@ -416,6 +382,50 @@ Term.prototype.write = function(ta)
     ua(this.y);
     if (la >= ka)
         this.refresh(ka, la);
+    //
+    function ua(y)
+    {
+        ka = Math.min(ka, y);
+        la = Math.max(la, y);
+    }
+    //Fill 第y行，x列之后的部分
+    function va(s, x, y)
+    {
+        var l, i, c;
+        l = s.lines[y];
+        c = 32 | (s.def_attr << 16);
+        for (i = x; i < s.w; i++)
+            l[i] = c;
+        ua(y);
+    }
+
+    function wa(s, xa)
+    {
+        var j, n;
+        if (xa.length == 0)
+        {
+            s.cur_attr = s.def_attr;
+        } 
+        else
+        {
+            for (j = 0; j < xa.length; j++)
+            {
+                n = xa[j];
+                if (n >= 30 && n <= 37)
+                {
+                    s.cur_attr = (s.cur_attr & ~(7 << 3)) | ((n - 30) << 3);
+                } 
+                else if (n >= 40 && n <= 47)
+                {
+                    s.cur_attr = (s.cur_attr & ~7) | (n - 40);
+                } 
+                else if (n == 0)
+                {
+                    s.cur_attr = s.def_attr;
+                }
+            }
+        }
+    }
 };
 
 Term.prototype.writeln = function(message)
@@ -509,6 +519,7 @@ Term.prototype.keyDownHandler = function(Da)
         return true;
     }
 };
+
 //处理字符输入,event.charCode
 Term.prototype.keyPressHandler = function(Da)
 {
