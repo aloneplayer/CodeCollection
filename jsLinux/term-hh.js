@@ -73,7 +73,7 @@ Term.prototype.open = function()
     }
     document.writeln('</table>');
     
-    //刷新所有行,从0到h-1
+    //refresh all lines, from 0 to h-1
     this.refresh(0, this.h - 1);
 
     document.addEventListener("keydown", this.keyDownHandler.bind(this), true);
@@ -86,7 +86,8 @@ Term.prototype.open = function()
     }, 1000);
 };
 
-//刷新terminal,从第yStart行到yEnd行
+//refresh terminal, from line yStart to yEnd
+//把terminal中的内容(字符,前景色,背景色)显示到html页面上
 Term.prototype.refresh = function(yStart, yEnd)
 {
     var domTD, y, currentLine, innerHtml, currentChar, w, i, cursorX, attribute, preAttribute, fgColor, bgColor;
@@ -208,9 +209,9 @@ Term.prototype.scroll = function()
 //Write string
 Term.prototype.write = function(str)
 {
-    var ya = 0;
-    var za = 1;
-    var Aa = 2;
+    var ya = 0;   //input mode
+    var za = 1;   //command mode
+    var Aa = 2;   //insert mode
     var i, chr, ka, la, l, n, j;
 
     ka = this.h;
@@ -222,10 +223,10 @@ Term.prototype.write = function(str)
         chr = str.charCodeAt(i);
         switch (this.state)
         {
-            case ya:
+            case ya:   //input mode
                 switch (chr)
                 {
-                    case 10:
+                    case 10:   //LF  \n
                         if (this.convert_lf_to_crlf)
                         {
                             this.x = 0;
@@ -239,23 +240,23 @@ Term.prototype.write = function(str)
                             la = this.h - 1;
                         }
                         break;
-                    case 13:
+                    case 13:   //CR   \r
                         this.x = 0;
                         break;
-                    case 8:
+                    case 8:    //backsapce
                         if (this.x > 0)
                         {
                             this.x--;
                         }
                         break;
-                    case 9:
+                    case 9:   //Tab
                         n = (this.x + 8) & ~7;
                         if (n <= this.w)
                         {
                             this.x = n;
                         }
                         break;
-                    case 27:
+                    case 27:  //Esc
                         this.state = za;
                         break;
                     default:
@@ -263,7 +264,7 @@ Term.prototype.write = function(str)
                         {
                             if (this.x >= this.w)
                             {
-                                this.x = 0;
+                                this.x = 0;aaa
                                 this.y++;
                                 if (this.y >= this.h)
                                 {
@@ -273,40 +274,41 @@ Term.prototype.write = function(str)
                                     la = this.h - 1;
                                 }
                             }
-                            this.lines[this.y][this.x] = (chr & 0xffff)
-							| (this.cur_attr << 16);
+                            // 设置字符和字符的外观
+                            this.lines[this.y][this.x] = (chr & 0xffff) | (this.cur_attr << 16);
                             this.x++;
                             ua(this.y);
                         }
                         break;
                 }
                 break;
-            case za:
-                if (chr == 91)
+            case za:   //vi command mode
+                if (chr == 91)   //[
                 {
                     this.esc_params = new Array();
                     this.cur_param = 0;
-                    this.state = Aa;
-                } else
+                    this.state = Aa;     //
+                } 
+                else
                 {
                     this.state = ya;
                 }
                 break;
-            case Aa:
-                if (chr >= 48 && chr <= 57)
+            case Aa:     //vi insert mode
+                if (chr >= 48 && chr <= 57)  //0-9
                 {
-                    this.cur_param = this.cur_param * 10 + chr - 48;
+                    this.cur_param = this.cur_param * 10 + chr - 48;    //输入的数字10*n+m
                 } 
                 else
                 {
                     this.esc_params[this.esc_params.length] = this.cur_param;
                     this.cur_param = 0;
-                    if (chr == 59)
+                    if (chr == 59)   // ;
                         break;
                     this.state = ya;
-                    switch (chr)
+                    switch (chr)      
                     {
-                        case 65:
+                        case 65:       //A
                             n = this.esc_params[0];
                             if (n < 1)
                                 n = 1;
@@ -314,7 +316,7 @@ Term.prototype.write = function(str)
                             if (this.y < 0)
                                 this.y = 0;
                             break;
-                        case 66:
+                        case 66:      //B
                             n = this.esc_params[0];
                             if (n < 1)
                                 n = 1;
@@ -322,7 +324,7 @@ Term.prototype.write = function(str)
                             if (this.y >= this.h)
                                 this.y = this.h - 1;
                             break;
-                        case 67:
+                        case 67:      //C
                             n = this.esc_params[0];
                             if (n < 1)
                                 n = 1;
@@ -330,7 +332,7 @@ Term.prototype.write = function(str)
                             if (this.x >= this.w - 1)
                                 this.x = this.w - 1;
                             break;
-                        case 68:
+                        case 68:    //D    delete n chars
                             n = this.esc_params[0];
                             if (n < 1)
                                 n = 1;
@@ -338,7 +340,7 @@ Term.prototype.write = function(str)
                             if (this.x < 0)
                                 this.x = 0;
                             break;
-                        case 72: 
+                        case 72:    //H
                             {
                                 var Ba, Ca;
                                 Ca = this.esc_params[0] - 1;
@@ -358,20 +360,19 @@ Term.prototype.write = function(str)
                                 this.y = Ca;
                             }
                             break;
-                        case 74:
-                            va(this, this.x, this.y);
+                        case 74:      //J   初始化vi屏幕
+                            fillEmptyChar(this, this.x, this.y);
                             for (j = this.y + 1; j < this.h; j++)
-                                va(this, 0, j);
+                                fillEmptyChar(this, 0, j);
                             break;
-                        case 75:
-                            va(this, this.x, this.y);
+                        case 75:      //K
+                            fillEmptyChar(this, this.x, this.y);
                             break;
-                        case 109:
+                        case 109:     //m
                             wa(this, this.esc_params);
                             break;
-                        case 110:
-                            this.queue_chars("\x1b[" + (this.y + 1) + ";"
-							+ (this.x + 1) + "R");
+                        case 110:      //n
+                            this.queue_chars("\x1b[" + (this.y + 1) + ";" + (this.x + 1) + "R");
                             break;
                         default:
                             break;
@@ -379,7 +380,8 @@ Term.prototype.write = function(str)
                 }
                 break;
         }
-    }
+    }  //end of for (i = 0; i < str.length; i++)
+    
     ua(this.y);
     if (la >= ka)
         this.refresh(ka, la);
@@ -389,23 +391,23 @@ Term.prototype.write = function(str)
         ka = Math.min(ka, y);
         la = Math.max(la, y);
     }
-    //Fill 第y行，x列之后的部分
-    function va(s, x, y)
+    //用 "empty" char 填充第y行，x列之后的部分 
+    function fillEmptyChar(terminal, x, y)
     {
         var l, i, c;
-        l = s.lines[y];
-        c = 32 | (s.def_attr << 16);
-        for (i = x; i < s.w; i++)
+        l = terminal.lines[y];
+        c = 32 | (terminal.def_attr << 16);  // 空字符,只有外观
+        for (i = x; i < terminal.w; i++)
             l[i] = c;
         ua(y);
     }
 
-    function wa(s, xa)
+    function wa(terminal, xa)
     {
         var j, n;
         if (xa.length == 0)
         {
-            s.cur_attr = s.def_attr;
+            terminal.cur_attr = terminal.def_attr;
         } 
         else
         {
@@ -414,15 +416,15 @@ Term.prototype.write = function(str)
                 n = xa[j];
                 if (n >= 30 && n <= 37)
                 {
-                    s.cur_attr = (s.cur_attr & ~(7 << 3)) | ((n - 30) << 3);
+                    terminal.cur_attr = (terminal.cur_attr & ~(7 << 3)) | ((n - 30) << 3);
                 } 
                 else if (n >= 40 && n <= 47)
                 {
-                    s.cur_attr = (s.cur_attr & ~7) | (n - 40);
+                    terminal.cur_attr = (terminal.cur_attr & ~7) | (n - 40);
                 } 
                 else if (n == 0)
                 {
-                    s.cur_attr = s.def_attr;
+                    terminal.cur_attr = terminal.def_attr;
                 }
             }
         }
