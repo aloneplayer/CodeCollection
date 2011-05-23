@@ -29,6 +29,7 @@ if (!Function.prototype.bind)
     };
 }
 
+//Constructor of Term
 //ha 函数把用户输入传递给VM
 function Term(width, height, ha)
 {
