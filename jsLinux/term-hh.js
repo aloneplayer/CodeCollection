@@ -206,24 +206,24 @@ Term.prototype.scroll = function()
 };
 
 //Write string
-Term.prototype.write = function(ta)
+Term.prototype.write = function(str)
 {
     var ya = 0;
     var za = 1;
     var Aa = 2;
-    var i, c, ka, la, l, n, j;
+    var i, chr, ka, la, l, n, j;
 
     ka = this.h;
     la = -1;
     ua(this.y);  
    
-    for (i = 0; i < ta.length; i++)
+    for (i = 0; i < str.length; i++)
     {
-        c = ta.charCodeAt(i);
+        chr = str.charCodeAt(i);
         switch (this.state)
         {
             case ya:
-                switch (c)
+                switch (chr)
                 {
                     case 10:
                         if (this.convert_lf_to_crlf)
@@ -259,7 +259,7 @@ Term.prototype.write = function(ta)
                         this.state = za;
                         break;
                     default:
-                        if (c >= 32)
+                        if (chr >= 32)   //¿É¼û×Ö·û
                         {
                             if (this.x >= this.w)
                             {
@@ -273,7 +273,7 @@ Term.prototype.write = function(ta)
                                     la = this.h - 1;
                                 }
                             }
-                            this.lines[this.y][this.x] = (c & 0xffff)
+                            this.lines[this.y][this.x] = (chr & 0xffff)
 							| (this.cur_attr << 16);
                             this.x++;
                             ua(this.y);
@@ -282,7 +282,7 @@ Term.prototype.write = function(ta)
                 }
                 break;
             case za:
-                if (c == 91)
+                if (chr == 91)
                 {
                     this.esc_params = new Array();
                     this.cur_param = 0;
@@ -293,18 +293,18 @@ Term.prototype.write = function(ta)
                 }
                 break;
             case Aa:
-                if (c >= 48 && c <= 57)
+                if (chr >= 48 && chr <= 57)
                 {
-                    this.cur_param = this.cur_param * 10 + c - 48;
+                    this.cur_param = this.cur_param * 10 + chr - 48;
                 } 
                 else
                 {
                     this.esc_params[this.esc_params.length] = this.cur_param;
                     this.cur_param = 0;
-                    if (c == 59)
+                    if (chr == 59)
                         break;
                     this.state = ya;
-                    switch (c)
+                    switch (chr)
                     {
                         case 65:
                             n = this.esc_params[0];

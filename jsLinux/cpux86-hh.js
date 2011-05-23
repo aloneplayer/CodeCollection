@@ -236,11 +236,7 @@ function ta(n)
 {
     return converHex(n, 4);
 }
-<<<<<<< HEAD
 //ÏÔÊ¾¼Ä´æÆ÷µÄÖµ
-=======
-
->>>>>>> remotes/origin/master
 ea.prototype.dump = function()
 {
     var i, ua, va;
