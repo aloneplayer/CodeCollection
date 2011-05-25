@@ -24,18 +24,29 @@ var ca = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 1, 2,
 var da = [0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4,
 		5, 6, 7, 8, 0, 1, 2, 3, 4];
 
-function ea()
+function CPU_X86()
 {
     var i, fa;
     this.regs = new Array();
+    //regs[0]   eax
+    //regs[1]
+    //regs[2]
+    //regs[3]   ebx 
+    //regs[0]
+    //regs[0]
+    //regs[0]
+    //regs[0]
     for (i = 0; i < 8; i++)
         this.regs[i] = 0;
-    this.eip = 0;
+
+    this.eip = 0;   
+    //操作符,操作数,
     this.cc_op = 0;
     this.cc_dst = 0;
     this.cc_src = 0;
     this.cc_op2 = 0;
     this.cc_dst2 = 0;
+       
     this.df = 1;
     this.eflags = 0x2;
     this.cycle_count = 0;
@@ -92,31 +103,41 @@ function ea()
     this.tlb_pages = new Int32Array(2048);
     this.tlb_pages_count = 0;
 }
-ea.prototype.phys_mem_resize = function(ga)
+//生成 VM的物理内存
+CPU_X86.prototype.phys_mem_resize = function(memorySize)
 {
-    this.mem_size = ga;
-    this.phys_mem = new ArrayBuffer(ga);
-    this.phys_mem8 = new Uint8Array(this.phys_mem, 0, ga);
-    this.phys_mem16 = new Uint16Array(this.phys_mem, 0, ga / 2);
-    this.phys_mem32 = new Int32Array(this.phys_mem, 0, ga / 4);
+    this.mem_size = memorySize;
+    //为什么申请了4块内存?
+    this.phys_mem = new ArrayBuffer(memorySize);
+    this.phys_mem8 = new Uint8Array(this.phys_mem, 0, memorySize);
+    this.phys_mem16 = new Uint16Array(this.phys_mem, 0, memorySize / 2);
+    this.phys_mem32 = new Int32Array(this.phys_mem, 0, memorySize / 4);
 };
-ea.prototype.ld8_phys = function(ha)
+
+//Access memory, read one byte from physical memory
+CPU_X86.prototype.ld8_phys = function(address)
 {
-    return this.phys_mem8[ha];
+    return this.phys_mem8[address];
 };
-ea.prototype.st8_phys = function(ha, ia)
+
+// Put one byte to memory
+CPU_X86.prototype.st8_phys = function(address, value)
 {
-    this.phys_mem8[ha] = ia;
+    this.phys_mem8[address] = value;
 };
-ea.prototype.ld32_phys = function(ha)
+
+//Read 
+CPU_X86.prototype.ld32_phys = function(address)
 {
-    return this.phys_mem32[ha >> 2];
+    return this.phys_mem32[address >> 2];
 };
-ea.prototype.st32_phys = function(ha, ia)
+//set 
+CPU_X86.prototype.st32_phys = function(address, value)
 {
-    this.phys_mem32[ha >> 2] = ia;
+    this.phys_mem32[address >> 2] = value;
 };
-ea.prototype.tlb_set_page = function(ha, ja, ka, la)
+
+CPU_X86.prototype.tlb_set_page = function(ha, ja, ka, la)
 {
     var i, ia, j;
     ja &= -4096;
@@ -155,7 +176,7 @@ ea.prototype.tlb_set_page = function(ha, ja, ka, la)
         this.tlb_write_user[i] = -1;
     }
 };
-ea.prototype.tlb_flush_page = function(ha)
+CPU_X86.prototype.tlb_flush_page = function(ha)
 {
     var i;
     i = ha >>> 12;
@@ -164,7 +185,7 @@ ea.prototype.tlb_flush_page = function(ha)
     this.tlb_read_user[i] = -1;
     this.tlb_write_user[i] = -1;
 };
-ea.prototype.tlb_flush_all = function()
+CPU_X86.prototype.tlb_flush_all = function()
 {
     var i, j, n, ma;
     ma = this.tlb_pages;
@@ -179,7 +200,7 @@ ea.prototype.tlb_flush_all = function()
     }
     this.tlb_pages_count = 0;
 };
-ea.prototype.tlb_flush_all1 = function(na)
+CPU_X86.prototype.tlb_flush_all1 = function(na)
 {
     var i, j, n, ma, oa;
     ma = this.tlb_pages;
@@ -201,7 +222,7 @@ ea.prototype.tlb_flush_all1 = function(na)
     }
     this.tlb_pages_count = oa;
 };
-ea.prototype.st8_N = function(ha, pa)
+CPU_X86.prototype.st8_N = function(ha, pa)
 {
     var i;
     for (i = 0; i < pa.length; i++)
@@ -237,7 +258,7 @@ function ta(n)
     return converHex(n, 4);
 }
 //显示寄存器的值
-ea.prototype.dump = function()
+CPU_X86.prototype.dump = function()
 {
     var i, ua, va;
     var wa = [" ES", " CS", " SS", " DS", " FS", " GS", "LDT", " TR"];
@@ -281,7 +302,7 @@ ea.prototype.dump = function()
     console.log(va);
 };
 
-ea.prototype.exec = function(xa)
+CPU_X86.prototype.exec = function(xa)
 {
     var ya, ha, za;
     var Aa, Ba, Ca, Da, Ea;
@@ -7416,7 +7437,7 @@ ea.prototype.exec = function(xa)
 };
 
 // Load binary file into memory
-ea.prototype.load_binary = function(url, memAddress)
+CPU_X86.prototype.load_binary = function(url, memAddress)
 {
     var xhr, fileContent, fileLength, i, bytesArray;
     xhr = new XMLHttpRequest();
@@ -8450,7 +8471,8 @@ xf.prototype.reset = function()
 };
 var ya, Bf, Qe;
 
-function Cf()
+//处理VM的时钟
+function emulator_timer_func()
 {
     var Na, Df, Ef, Ff, Gf;
     Ef = ya.cycle_count + 100000;
@@ -8481,10 +8503,11 @@ function Cf()
     {
         if (Gf)
         {
-            setTimeout(Cf, 10);
-        } else
+            setTimeout(emulator_timer_func, 10);
+        } 
+        else
         {
-            setTimeout(Cf, 0);
+            setTimeout(emulator_timer_func, 0);
         }
     }
 }
@@ -8508,7 +8531,7 @@ function isBrowserSupportTypedArray()
 
 function start()
 {
-    var Lf, i, start, Mf, Nf, yf;
+    var Lf, i, start_addr, memorySize, initrd_size, yf;
     if (!isBrowserSupportTypedArray())
     {
         terminal.writeln("");
@@ -8518,19 +8541,19 @@ function start()
         terminal.writeln("- Google Chrome 11");
         return;
     }
-    ya = new ea();
+    ya = new CPU_X86();
     yf = new Object();
     yf.jsclipboard_el = document.getElementById("text_clipboard");
     Qe = new xf(yf);
-    Mf = 32 * 1024 * 1024;   //4G Memory
-    ya.phys_mem_resize(Mf);
+    memorySize = 32 * 1024 * 1024;   //4G Memory
+    ya.phys_mem_resize(memorySize);
     ya.load_binary("vmlinux26.bin", 0x00100000);
-    Nf = ya.load_binary("root.bin", 0x00400000);
-    start = 0x10000;
-    ya.load_binary("linuxstart.bin", start);
-    ya.eip = start;         //Execute the code at 0x10000
-    ya.regs[0] = Mf;
-    ya.regs[3] = Nf;
+    initrd_size = ya.load_binary("root.bin", 0x00400000);
+    start_addr = 0x10000;
+    ya.load_binary("linuxstart.bin", start_addr);
+    ya.eip = start_addr;         //Execute the code at 0x10000
+    ya.regs[0] = memorySize;     //eax    memory size
+    ya.regs[3] = initrd_size;     //ebx
     ya.cycle_count = 0;
     ya.ld8_port = Qe.ld8_port.bind(Qe);
     ya.ld16_port = Qe.ld16_port.bind(Qe);
@@ -8540,7 +8563,7 @@ function start()
     ya.st32_port = Qe.st32_port.bind(Qe);
     ya.get_hard_intno = Qe.pic.get_hard_intno.bind(Qe.pic);
     Bf = Date.now();
-    setTimeout(Cf, 10);
+    setTimeout(emulator_timer_func, 10);      //Start the pc emulater
 }
 
 function clear_clipboard()
