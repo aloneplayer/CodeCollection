@@ -19,10 +19,14 @@ var ba = [1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0,
 		0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0,
 		1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1,
 		0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1];
-var ca = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 0, 1, 2,
-		3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
-var da = [0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4, 5, 6, 7, 8, 0, 1, 2, 3, 4,
-		5, 6, 7, 8, 0, 1, 2, 3, 4];
+
+var ca = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+
+var da = [0, 1, 2, 3, 4, 5, 6, 7, 8,
+          0, 1, 2, 3, 4, 5, 6, 7, 8,
+          0, 1, 2, 3, 4, 5, 6, 7, 8, 
+          0, 1, 2, 3, 4];
 
 function CPU_X86()
 {
@@ -56,10 +60,13 @@ function CPU_X86()
     this.cr2 = 0;
     this.cr3 = 0;
     this.cr4 = 0;
+    
+    // Interrupt descriptor table
     this.idt = {
         base: 0,
         limit: 0
     };
+    // Global descriptor table 
     this.gdt = {
         base: 0,
         limit: 0
@@ -80,12 +87,15 @@ function CPU_X86()
         limit: 0,
         flags: 0
     };
+    //Local descriptor table
+    //
     this.ldt = {
         selector: 0,
         base: 0,
         limit: 0,
         flags: 0
     };
+    
     this.halted = 0;
     this.phys_mem = null;
     size = 0x100000;
@@ -160,7 +170,8 @@ CPU_X86.prototype.tlb_set_page = function(ha, ja, ka, la)
     if (ka)
     {
         this.tlb_write_kernel[i] = ia;
-    } else
+    } 
+    else
     {
         this.tlb_write_kernel[i] = -1;
     }
@@ -174,7 +185,8 @@ CPU_X86.prototype.tlb_set_page = function(ha, ja, ka, la)
         {
             this.tlb_write_user[i] = -1;
         }
-    } else
+    } 
+    else
     {
         this.tlb_read_user[i] = -1;
         this.tlb_write_user[i] = -1;
@@ -204,6 +216,7 @@ CPU_X86.prototype.tlb_flush_all = function()
     }
     this.tlb_pages_count = 0;
 };
+
 CPU_X86.prototype.tlb_flush_all1 = function(na)
 {
     var i, j, n, ma, oa;
