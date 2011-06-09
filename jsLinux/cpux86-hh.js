@@ -215,6 +215,9 @@ CPU_X86.prototype.tlb_set_page = function(ha, ja, ka, la)
         this.tlb_write_user[i] = -1;
     }
 };
+
+//CR3 31-12位保存当前活动进程的页面目录的基地址
+//把页面目录清零
 CPU_X86.prototype.tlb_flush_page = function(ha)
 {
     var i;
@@ -224,18 +227,20 @@ CPU_X86.prototype.tlb_flush_page = function(ha)
     this.tlb_read_user[i] = -1;
     this.tlb_write_user[i] = -1;
 };
+
+
 CPU_X86.prototype.tlb_flush_all = function()
 {
-    var i, j, n, ma;
-    ma = this.tlb_pages;
-    n = this.tlb_pages_count;
-    for (j = 0; j < n; j++)
+    var page, j, pagesCount, pages;
+    pages = this.tlb_pages;
+    pagesCount = this.tlb_pages_count;
+    for (j = 0; j < pagesCount; j++)
     {
-        i = ma[j];
-        this.tlb_read_kernel[i] = -1;
-        this.tlb_write_kernel[i] = -1;
-        this.tlb_read_user[i] = -1;
-        this.tlb_write_user[i] = -1;
+        page = pages[j];
+        this.tlb_read_kernel[page] = -1;
+        this.tlb_write_kernel[page] = -1;
+        this.tlb_read_user[page] = -1;
+        this.tlb_write_user[page] = -1;
     }
     this.tlb_pages_count = 0;
 };
@@ -353,19 +358,22 @@ CPU_X86.prototype.exec = function(xa)
     var Aa, Ba, Ca, Da, Ea;
     var Fa, Ga, Ha, b, Ia, ia, Ja, Ka, La, Ma, Na, Oa;
     var Pa, Qa;
-    var Ra, Sa, Ta, Ua;
-    var Va, Wa, Xa, Ya, Za, ab;
+
+    var phys_mem8, phys_mem16, phys_mem32, Ua;
+    
+    var tlb_read_kernel, tlb_write_kernel, tlb_read_user, tlb_write_user, Za, ab;
+    
     function bb()
     {
         var cb;
         db(ha, 0, cpu.cpl == 3);
         cb = Za[ha >>> 12] ^ ha;
-        return Ra[cb];
+        return phys_mem8[cb];
     }
     function eb()
     {
         var Ua;
-        return (((Ua = Za[ha >>> 12]) == -1) ? bb() : Ra[ha ^ Ua]);
+        return (((Ua = Za[ha >>> 12]) == -1) ? bb() : phys_mem8[ha ^ Ua]);
     }
     function fb()
     {
@@ -379,7 +387,7 @@ CPU_X86.prototype.exec = function(xa)
     function gb()
     {
         var Ua;
-        return (((Ua = Za[ha >>> 12]) | ha) & 1 ? fb() : Sa[(ha ^ Ua) >> 1]);
+        return (((Ua = Za[ha >>> 12]) | ha) & 1 ? fb() : phys_mem16[(ha ^ Ua) >> 1]);
     }
     function hb()
     {
@@ -397,19 +405,19 @@ CPU_X86.prototype.exec = function(xa)
     function ib()
     {
         var Ua;
-        return (((Ua = Za[ha >>> 12]) | ha) & 3 ? hb() : Ta[(ha ^ Ua) >> 2]);
+        return (((Ua = Za[ha >>> 12]) | ha) & 3 ? hb() : phys_mem32[(ha ^ Ua) >> 2]);
     }
     function jb()
     {
         var cb;
         db(ha, 1, cpu.cpl == 3);
         cb = ab[ha >>> 12] ^ ha;
-        return Ra[cb];
+        return phys_mem8[cb];
     }
     function kb()
     {
         var cb;
-        return ((cb = ab[ha >>> 12]) == -1) ? jb() : Ra[ha ^ cb];
+        return ((cb = ab[ha >>> 12]) == -1) ? jb() : phys_mem8[ha ^ cb];
     }
     function lb()
     {
@@ -423,7 +431,7 @@ CPU_X86.prototype.exec = function(xa)
     function mb()
     {
         var cb;
-        return ((cb = ab[ha >>> 12]) | ha) & 1 ? lb() : Sa[(ha ^ cb) >> 1];
+        return ((cb = ab[ha >>> 12]) | ha) & 1 ? lb() : phys_mem16[(ha ^ cb) >> 1];
     }
     function nb()
     {
@@ -441,14 +449,14 @@ CPU_X86.prototype.exec = function(xa)
     function ob()
     {
         var cb;
-        return ((cb = ab[ha >>> 12]) | ha) & 3 ? nb() : Ta[(ha ^ cb) >> 2];
+        return ((cb = ab[ha >>> 12]) | ha) & 3 ? nb() : phys_mem32[(ha ^ cb) >> 2];
     }
     function pb(ia)
     {
         var cb;
         db(ha, 1, cpu.cpl == 3);
         cb = ab[ha >>> 12] ^ ha;
-        Ra[cb] = ia;
+        phys_mem8[cb] = ia;
     }
     function qb(ia)
     {
@@ -460,7 +468,7 @@ CPU_X86.prototype.exec = function(xa)
                 pb(ia);
             } else
             {
-                Ra[ha ^ Ua] = ia;
+                phys_mem8[ha ^ Ua] = ia;
             }
         }
         ;
@@ -482,7 +490,7 @@ CPU_X86.prototype.exec = function(xa)
                 rb(ia);
             } else
             {
-                Sa[(ha ^ Ua) >> 1] = ia;
+                phys_mem16[(ha ^ Ua) >> 1] = ia;
             }
         }
         ;
@@ -508,7 +516,7 @@ CPU_X86.prototype.exec = function(xa)
                 tb(ia);
             } else
             {
-                Ta[(ha ^ Ua) >> 2] = ia;
+                phys_mem32[(ha ^ Ua) >> 2] = ia;
             }
         }
         ;
@@ -517,13 +525,13 @@ CPU_X86.prototype.exec = function(xa)
     {
         var cb;
         db(ha, 0, 0);
-        cb = Va[ha >>> 12] ^ ha;
-        return Ra[cb];
+        cb = tlb_read_kernel[ha >>> 12] ^ ha;
+        return phys_mem8[cb];
     }
     function wb()
     {
         var cb;
-        return ((cb = Va[ha >>> 12]) == -1) ? vb() : Ra[ha ^ cb];
+        return ((cb = tlb_read_kernel[ha >>> 12]) == -1) ? vb() : phys_mem8[ha ^ cb];
     }
     function xb()
     {
@@ -537,7 +545,7 @@ CPU_X86.prototype.exec = function(xa)
     function yb()
     {
         var cb;
-        return ((cb = Va[ha >>> 12]) | ha) & 1 ? xb() : Sa[(ha ^ cb) >> 1];
+        return ((cb = tlb_read_kernel[ha >>> 12]) | ha) & 1 ? xb() : phys_mem16[(ha ^ cb) >> 1];
     }
     function zb()
     {
@@ -555,25 +563,25 @@ CPU_X86.prototype.exec = function(xa)
     function Ab()
     {
         var cb;
-        return ((cb = Va[ha >>> 12]) | ha) & 3 ? zb() : Ta[(ha ^ cb) >> 2];
+        return ((cb = tlb_read_kernel[ha >>> 12]) | ha) & 3 ? zb() : phys_mem32[(ha ^ cb) >> 2];
     }
     function Bb(ia)
     {
         var cb;
         db(ha, 1, 0);
-        cb = Wa[ha >>> 12] ^ ha;
-        Ra[cb] = ia;
+        cb = tlb_write_kernel[ha >>> 12] ^ ha;
+        phys_mem8[cb] = ia;
     }
     function Cb(ia)
     {
         var cb;
-        cb = Wa[ha >>> 12];
+        cb = tlb_write_kernel[ha >>> 12];
         if (cb == -1)
         {
             Bb(ia);
         } else
         {
-            Ra[ha ^ cb] = ia;
+            phys_mem8[ha ^ cb] = ia;
         }
     }
     function Db(ia)
@@ -586,13 +594,13 @@ CPU_X86.prototype.exec = function(xa)
     function Eb(ia)
     {
         var cb;
-        cb = Wa[ha >>> 12];
+        cb = tlb_write_kernel[ha >>> 12];
         if ((cb | ha) & 1)
         {
             Db(ia);
         } else
         {
-            Sa[(ha ^ cb) >> 1] = ia;
+            phys_mem16[(ha ^ cb) >> 1] = ia;
         }
     }
     function Fb(ia)
@@ -609,13 +617,13 @@ CPU_X86.prototype.exec = function(xa)
     function Gb(ia)
     {
         var cb;
-        cb = Wa[ha >>> 12];
+        cb = tlb_write_kernel[ha >>> 12];
         if ((cb | ha) & 3)
         {
             Fb(ia);
         } else
         {
-            Ta[(ha ^ cb) >> 2] = ia;
+            phys_mem32[(ha ^ cb) >> 2] = ia;
         }
     }
     var Hb, Ib;
@@ -624,15 +632,15 @@ CPU_X86.prototype.exec = function(xa)
         var cb;
         db(ha, 0, cpu.cpl == 3);
         cb = Za[ha >>> 12] ^ ha;
-        return Ra[cb];
+        return phys_mem8[cb];
     }
     function Kb()
     {
         var ia, Ja;
-        ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+        ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
         Hb++;
         ;
-        Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+        Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
         Hb++;
         ;
         return ia | (Ja << 8);
@@ -644,23 +652,23 @@ CPU_X86.prototype.exec = function(xa)
         if (((Hb | cb) & 0xfff) <= 4092)
         {
             cb ^= Hb;
-            ia = Ra[cb] | (Ra[cb + 1] << 8) | (Ra[cb + 2] << 16)
-					| (Ra[cb + 3] << 24);
+            ia = phys_mem8[cb] | (phys_mem8[cb + 1] << 8) | (phys_mem8[cb + 2] << 16)
+					| (phys_mem8[cb + 3] << 24);
             Hb += 4;
         } else
         {
-            ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+            ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
             Hb++;
             ;
-            Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+            Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
             Hb++;
             ;
             ia |= Ja << 8;
-            Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+            Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
             Hb++;
             ;
             ia |= Ja << 16;
-            Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+            Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
             Hb++;
             ;
             ia |= Ja << 24;
@@ -673,7 +681,7 @@ CPU_X86.prototype.exec = function(xa)
         switch ((Ga & 7) | ((Ga >> 3) & 0x18))
         {
             case 0x04:
-                Ob = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                Ob = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                 Hb++;
                 ;
                 base = Ob & 7;
@@ -693,10 +701,10 @@ CPU_X86.prototype.exec = function(xa)
                 }
                 break;
             case 0x0c:
-                Ob = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                Ob = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                 Hb++;
                 ;
-                ha = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua]) << 24) >> 24;
+                ha = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua]) << 24) >> 24;
                 Hb++;
                 ;
                 base = Ob & 7;
@@ -710,7 +718,7 @@ CPU_X86.prototype.exec = function(xa)
                 }
                 break;
             case 0x14:
-                Ob = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                Ob = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                 Hb++;
                 ;
                 ha = Lb();
@@ -743,7 +751,7 @@ CPU_X86.prototype.exec = function(xa)
             case 0x0d:
             case 0x0e:
             case 0x0f:
-                ha = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua]) << 24) >> 24;
+                ha = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua]) << 24) >> 24;
                 Hb++;
                 ;
                 base = Ga & 7;
@@ -2116,12 +2124,12 @@ CPU_X86.prototype.exec = function(xa)
         cpu.cpl = bd;
         if (cpu.cpl == 3)
         {
-            Za = Xa;
-            ab = Ya;
+            Za = tlb_read_user;
+            ab = tlb_write_user;
         } else
         {
-            Za = Va;
-            ab = Wa;
+            Za = tlb_read_kernel;
+            ab = tlb_write_kernel;
         }
     }
     function cd(ha, dd)
@@ -2164,7 +2172,7 @@ CPU_X86.prototype.exec = function(xa)
             hd >>= 2;
             gd >>= 2;
             for (i = 0; i < fd; i++)
-                Ta[hd + i] = Ta[gd + i];
+                phys_mem32[hd + i] = phys_mem32[gd + i];
             id = fd << 2;
             za[6] = (za[6] + id) & -1;
             za[7] = (za[7] + id) & -1;
@@ -2186,7 +2194,7 @@ CPU_X86.prototype.exec = function(xa)
             hd >>= 2;
             ia = za[0];
             for (i = 0; i < fd; i++)
-                Ta[hd + i] = ia;
+                phys_mem32[hd + i] = ia;
             id = fd << 2;
             za[7] = (za[7] + id) & -1;
             za[1] = (za[1] - fd) & -1;
@@ -2194,6 +2202,7 @@ CPU_X86.prototype.exec = function(xa)
         }
         return false;
     }
+    //
     function db(kd, ld, la)
     {
         var md, nd, error_code, od, pd, qd, rd, dd, sd;
@@ -2935,22 +2944,26 @@ CPU_X86.prototype.exec = function(xa)
                 break;
         }
     }
+    
+    //CPU exec
     cpu = this;
-    Ra = this.phys_mem8;
-    Sa = this.phys_mem16;
-    Ta = this.phys_mem32;
-    Xa = this.tlb_read_user;
-    Ya = this.tlb_write_user;
-    Va = this.tlb_read_kernel;
-    Wa = this.tlb_write_kernel;
+    phys_mem8 = this.phys_mem8;
+    phys_mem16 = this.phys_mem16;
+    phys_mem32 = this.phys_mem32;
+    
+    tlb_read_user = this.tlb_read_user;
+    tlb_write_user = this.tlb_write_user;
+    tlb_read_kernel = this.tlb_read_kernel;
+    tlb_write_kernel = this.tlb_write_kernel;
     if (cpu.cpl == 3)
     {
-        Za = Xa;
-        ab = Ya;
-    } else
+        Za = tlb_read_user;
+        ab = tlb_write_user;
+    } 
+    else
     {
-        Za = Va;
-        ab = Wa;
+        Za = tlb_read_kernel;
+        ab = tlb_write_kernel;
     }
     if (cpu.halted)
     {
@@ -2993,7 +3006,7 @@ CPU_X86.prototype.exec = function(xa)
             {
                 Ib = Hb;
                 Fa = 0;
-                b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                 Hb++;
                 ;
                 if (0)
@@ -3006,35 +3019,35 @@ CPU_X86.prototype.exec = function(xa)
                     {
                         case 0x66:
                             Fa |= 0x0100;
-                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             b |= (Fa & 0x0100);
                             break;
                         case 0xf0:
                             Fa |= 0x0040;
-                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             b |= (Fa & 0x0100);
                             break;
                         case 0xf2:
                             Fa |= 0x0020;
-                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             b |= (Fa & 0x0100);
                             break;
                         case 0xf3:
                             Fa |= 0x0010;
-                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             b |= (Fa & 0x0100);
                             break;
                         case 0x64:
                             Fa = (Fa & ~0x000f) | (4 + 1);
-                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             b |= (Fa & 0x0100);
@@ -3042,7 +3055,7 @@ CPU_X86.prototype.exec = function(xa)
                             break;
                         case 0x65:
                             Fa = (Fa & ~0x000f) | (5 + 1);
-                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             b |= (Fa & 0x0100);
@@ -3057,7 +3070,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0xb6:
                         case 0xb7:
                             ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Rb(b & 7, ia);
@@ -3075,7 +3088,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x88:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ia = (Ga >> 3) & 7;
@@ -3093,7 +3106,7 @@ CPU_X86.prototype.exec = function(xa)
                                         pb(ia);
                                     } else
                                     {
-                                        Ra[ha ^ Ua] = ia;
+                                        phys_mem8[ha ^ Ua] = ia;
                                     }
                                 }
                                 ;
@@ -3101,7 +3114,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x89:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             ia = za[(Ga >> 3) & 7];
@@ -3118,7 +3131,7 @@ CPU_X86.prototype.exec = function(xa)
                                         tb(ia);
                                     } else
                                     {
-                                        Ta[(ha ^ Ua) >> 2] = ia;
+                                        phys_mem32[(ha ^ Ua) >> 2] = ia;
                                     }
                                 }
                                 ;
@@ -3126,7 +3139,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x8a:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             if ((Ga >> 6) == 3)
@@ -3136,14 +3149,14 @@ CPU_X86.prototype.exec = function(xa)
                             } else
                             {
                                 ha = Mb(Ga);
-                                ia = (((Ua = Za[ha >>> 12]) == -1) ? bb() : Ra[ha
+                                ia = (((Ua = Za[ha >>> 12]) == -1) ? bb() : phys_mem8[ha
 									^ Ua]);
                             }
                             Rb((Ga >> 3) & 7, ia);
                             break Ee;
                         case 0x8b:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             if ((Ga >> 6) == 3)
@@ -3153,7 +3166,7 @@ CPU_X86.prototype.exec = function(xa)
                             {
                                 ha = Mb(Ga);
                                 ia = (((Ua = Za[ha >>> 12]) | ha) & 3 ? hb()
-									: Ta[(ha ^ Ua) >> 2]);
+									: phys_mem32[(ha ^ Ua) >> 2]);
                             }
                             za[(Ga >> 3) & 7] = ia;
                             break Ee;
@@ -3177,12 +3190,12 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xc6:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             if ((Ga >> 6) == 3)
                             {
-                                ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                 Hb++;
                                 ;
@@ -3190,7 +3203,7 @@ CPU_X86.prototype.exec = function(xa)
                             } else
                             {
                                 ha = Mb(Ga);
-                                ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                 Hb++;
                                 ;
@@ -3199,7 +3212,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xc7:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             if ((Ga >> 6) == 3)
@@ -3227,7 +3240,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x86:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ia = (Ga >> 3) & 7;
@@ -3246,7 +3259,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x87:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ia = (Ga >> 3) & 7;
@@ -3265,7 +3278,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x8e:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ia = (Ga >> 3) & 7;
@@ -3283,7 +3296,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x8c:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ia = (Ga >> 3) & 7;
@@ -3302,7 +3315,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0xc4:
                             {
                                 Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                                 Hb++;
                                 ;
                                 if ((Ga >> 3) == 3)
@@ -3319,7 +3332,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0xc5:
                             {
                                 Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                                 Hb++;
                                 ;
                                 if ((Ga >> 3) == 3)
@@ -3342,7 +3355,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0x30:
                         case 0x38:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = b >> 3;
@@ -3377,7 +3390,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0x29:
                         case 0x31:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = b >> 3;
@@ -3396,7 +3409,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x39:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = b >> 3;
@@ -3431,7 +3444,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0x32:
                         case 0x3a:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = b >> 3;
@@ -3456,7 +3469,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0x2b:
                         case 0x33:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = b >> 3;
@@ -3473,7 +3486,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x3b:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = b >> 3;
@@ -3502,7 +3515,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0x34:
                         case 0x3c:
                             Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = b >> 3;
@@ -3522,14 +3535,14 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x80:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
                             if ((Ga >> 6) == 3)
                             {
                                 Ha = Ga & 7;
-                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                 Hb++;
                                 ;
@@ -3539,7 +3552,7 @@ CPU_X86.prototype.exec = function(xa)
                             } else
                             {
                                 ha = Mb(Ga);
-                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                 Hb++;
                                 ;
@@ -3557,7 +3570,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x81:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -3584,7 +3597,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x83:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -3592,7 +3605,7 @@ CPU_X86.prototype.exec = function(xa)
                             {
                                 Ha = Ga & 7;
                                 Ja = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-									: Ra[Hb ^ Ua]) << 24) >> 24;
+									: phys_mem8[Hb ^ Ua]) << 24) >> 24;
                                 Hb++;
                                 ;
                                 za[Ha] = dc(La, za[Ha], Ja);
@@ -3600,7 +3613,7 @@ CPU_X86.prototype.exec = function(xa)
                             {
                                 ha = Mb(Ga);
                                 Ja = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-									: Ra[Hb ^ Ua]) << 24) >> 24;
+									: phys_mem8[Hb ^ Ua]) << 24) >> 24;
                                 Hb++;
                                 ;
                                 if (La != 7)
@@ -3655,7 +3668,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x6b:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ia = (Ga >> 3) & 7;
@@ -3667,7 +3680,7 @@ CPU_X86.prototype.exec = function(xa)
                                 ha = Mb(Ga);
                                 Ja = ib();
                             }
-                            Ka = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                            Ka = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 								^ Ua]) << 24) >> 24;
                             Hb++;
                             ;
@@ -3675,7 +3688,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x69:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ia = (Ga >> 3) & 7;
@@ -3692,7 +3705,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x84:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             if ((Ga >> 6) == 3)
@@ -3711,7 +3724,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x85:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             if ((Ga >> 6) == 3)
@@ -3728,7 +3741,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xa8:
                             Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ba = za[0] & Ja;
@@ -3741,7 +3754,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xf6:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -3757,7 +3770,7 @@ CPU_X86.prototype.exec = function(xa)
                                         ha = Mb(Ga);
                                         ia = eb();
                                     }
-                                    Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -3851,7 +3864,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xf7:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -3950,13 +3963,13 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xc0:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
                             if ((Ga >> 6) == 3)
                             {
-                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                 Hb++;
                                 ;
@@ -3967,7 +3980,7 @@ CPU_X86.prototype.exec = function(xa)
                             } else
                             {
                                 ha = Mb(Ga);
-                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                 Hb++;
                                 ;
@@ -3978,13 +3991,13 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xc1:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
                             if ((Ga >> 6) == 3)
                             {
-                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                 Hb++;
                                 ;
@@ -3993,7 +4006,7 @@ CPU_X86.prototype.exec = function(xa)
                             } else
                             {
                                 ha = Mb(Ga);
-                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                 Hb++;
                                 ;
@@ -4004,7 +4017,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xd0:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -4027,7 +4040,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xd1:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -4045,7 +4058,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xd2:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -4066,7 +4079,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xd3:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -4106,7 +4119,7 @@ CPU_X86.prototype.exec = function(xa)
                                     tb(ia);
                                 } else
                                 {
-                                    Ta[(ha ^ Ua) >> 2] = ia;
+                                    phys_mem32[(ha ^ Ua) >> 2] = ia;
                                 }
                             }
                             ;
@@ -4122,7 +4135,7 @@ CPU_X86.prototype.exec = function(xa)
                         case 0x5f:
                             ha = za[4];
                             ia = (((Ua = Za[ha >>> 12]) | ha) & 3 ? hb()
-								: Ta[(ha ^ Ua) >> 2]);
+								: phys_mem32[(ha ^ Ua) >> 2]);
                             za[4] = (ha + 4) & -1;
                             za[b & 7] = ia;
                             break Ee;
@@ -4139,7 +4152,7 @@ CPU_X86.prototype.exec = function(xa)
                                         tb(ia);
                                     } else
                                     {
-                                        Ta[(ha ^ Ua) >> 2] = ia;
+                                        phys_mem32[(ha ^ Ua) >> 2] = ia;
                                     }
                                 }
                                 ;
@@ -4154,7 +4167,7 @@ CPU_X86.prototype.exec = function(xa)
                                 if (Ia != 4)
                                 {
                                     za[Ia] = (((Ua = Za[ha >>> 12]) | ha) & 3 ? hb()
-										: Ta[(ha ^ Ua) >> 2]);
+										: phys_mem32[(ha ^ Ua) >> 2]);
                                 }
                                 ha = (ha + 4) & -1;
                             }
@@ -4162,7 +4175,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x8f:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             if ((Ga >> 6) == 3)
@@ -4187,7 +4200,7 @@ CPU_X86.prototype.exec = function(xa)
                             za[4] = ha;
                             break Ee;
                         case 0x6a:
-                            ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                            ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 								^ Ua]) << 24) >> 24;
                             Hb++;
                             ;
@@ -4309,7 +4322,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0x8d:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             if ((Ga >> 6) == 3)
@@ -4318,7 +4331,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xfe:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -4360,7 +4373,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xff:
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             La = (Ga >> 3) & 7;
@@ -4469,7 +4482,7 @@ CPU_X86.prototype.exec = function(xa)
                             }
                             break Ee;
                         case 0xeb:
-                            ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                            ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 								^ Ua]) << 24) >> 24;
                             Hb++;
                             ;
@@ -4501,7 +4514,7 @@ CPU_X86.prototype.exec = function(xa)
                             if (Xb(b & 0xf))
                             {
                                 ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-									: Ra[Hb ^ Ua]) << 24) >> 24;
+									: phys_mem8[Hb ^ Ua]) << 24) >> 24;
                                 Hb++;
                                 ;
                                 Hb = (Hb + ia) >> 0;
@@ -4565,7 +4578,7 @@ CPU_X86.prototype.exec = function(xa)
                             if (Ja)
                             {
                                 ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-									: Ra[Hb ^ Ua]) << 24) >> 24;
+									: phys_mem8[Hb ^ Ua]) << 24) >> 24;
                                 Hb++;
                                 ;
                                 Hb = (Hb + ia) >> 0;
@@ -4629,7 +4642,7 @@ CPU_X86.prototype.exec = function(xa)
                             if (!Ja)
                             {
                                 ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-									: Ra[Hb ^ Ua]) << 24) >> 24;
+									: phys_mem8[Hb ^ Ua]) << 24) >> 24;
                                 Hb++;
                                 ;
                                 Hb = (Hb + ia) >> 0;
@@ -4639,7 +4652,7 @@ CPU_X86.prototype.exec = function(xa)
                             }
                             break Ee;
                         case 0xe2:
-                            ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                            ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 								^ Ua]) << 24) >> 24;
                             Hb++;
                             ;
@@ -4648,7 +4661,7 @@ CPU_X86.prototype.exec = function(xa)
                                 Hb = (Hb + ia) >> 0;
                             break Ee;
                         case 0xe3:
-                            ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                            ia = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 								^ Ua]) << 24) >> 24;
                             Hb++;
                             ;
@@ -4683,7 +4696,7 @@ CPU_X86.prototype.exec = function(xa)
                             break Ee;
                         case 0xcd:
                             ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ja = Hb;
@@ -5066,7 +5079,7 @@ CPU_X86.prototype.exec = function(xa)
                                 vc(7);
                             }
                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Ia = (Ga >> 3) & 7;
@@ -5087,7 +5100,7 @@ CPU_X86.prototype.exec = function(xa)
                             if (cpu.cpl > ye)
                                 vc(13);
                             ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             Rb(0, cpu.ld8_port(ia));
@@ -5102,7 +5115,7 @@ CPU_X86.prototype.exec = function(xa)
                             if (cpu.cpl > ye)
                                 vc(13);
                             ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             za[0] = cpu.ld32_port(ia);
@@ -5117,7 +5130,7 @@ CPU_X86.prototype.exec = function(xa)
                             if (cpu.cpl > ye)
                                 vc(13);
                             ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             cpu.st8_port(ia, za[0] & 0xff);
@@ -5132,7 +5145,7 @@ CPU_X86.prototype.exec = function(xa)
                             if (cpu.cpl > ye)
                                 vc(13);
                             ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-								: Ra[Hb ^ Ua];
+								: phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             cpu.st32_port(ia, za[0]);
@@ -5216,7 +5229,7 @@ CPU_X86.prototype.exec = function(xa)
                             vc(6);
                             break;
                         case 0x0f:
-                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb ^ Ua];
+                            b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                             Hb++;
                             ;
                             switch (b)
@@ -5258,7 +5271,7 @@ CPU_X86.prototype.exec = function(xa)
                                 case 0x9d:
                                 case 0x9e:
                                 case 0x9f:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5288,7 +5301,7 @@ CPU_X86.prototype.exec = function(xa)
                                 case 0x4d:
                                 case 0x4e:
                                 case 0x4f:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5304,7 +5317,7 @@ CPU_X86.prototype.exec = function(xa)
                                         za[(Ga >> 3) & 7] = ia;
                                     break Ee;
                                 case 0xb6:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5321,7 +5334,7 @@ CPU_X86.prototype.exec = function(xa)
                                     za[Ia] = ia;
                                     break Ee;
                                 case 0xb7:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5337,7 +5350,7 @@ CPU_X86.prototype.exec = function(xa)
                                     za[Ia] = ia & 0xffff;
                                     break Ee;
                                 case 0xbe:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5354,7 +5367,7 @@ CPU_X86.prototype.exec = function(xa)
                                     za[Ia] = (ia << 24) >> 24;
                                     break Ee;
                                 case 0xbf:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5370,7 +5383,7 @@ CPU_X86.prototype.exec = function(xa)
                                     za[Ia] = (ia << 16) >> 16;
                                     break Ee;
                                 case 0x00:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5423,7 +5436,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0x01:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5465,7 +5478,7 @@ CPU_X86.prototype.exec = function(xa)
                                 case 0x20:
                                     if (cpu.cpl != 0)
                                         vc(13);
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5494,7 +5507,7 @@ CPU_X86.prototype.exec = function(xa)
                                 case 0x22:
                                     if (cpu.cpl != 0)
                                         vc(13);
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5528,7 +5541,7 @@ CPU_X86.prototype.exec = function(xa)
                                 case 0x23:
                                     if (cpu.cpl != 0)
                                         vc(13);
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5541,7 +5554,7 @@ CPU_X86.prototype.exec = function(xa)
                                     break Ee;
                                 case 0xb2:
                                     {
-                                        Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                        Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                         Hb++;
                                         ;
@@ -5558,7 +5571,7 @@ CPU_X86.prototype.exec = function(xa)
                                     break Ee;
                                 case 0xb4:
                                     {
-                                        Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                        Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                         Hb++;
                                         ;
@@ -5575,7 +5588,7 @@ CPU_X86.prototype.exec = function(xa)
                                     break Ee;
                                 case 0xb5:
                                     {
-                                        Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                        Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                         Hb++;
                                         ;
@@ -5594,7 +5607,7 @@ CPU_X86.prototype.exec = function(xa)
                                     Ce();
                                     break Ee;
                                 case 0xa4:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5602,7 +5615,7 @@ CPU_X86.prototype.exec = function(xa)
                                     if ((Ga >> 6) == 3)
                                     {
                                         Ka = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                         Hb++;
                                         ;
                                         Ha = Ga & 7;
@@ -5611,7 +5624,7 @@ CPU_X86.prototype.exec = function(xa)
                                     {
                                         ha = Mb(Ga);
                                         Ka = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                         Hb++;
                                         ;
                                         ia = ob();
@@ -5620,7 +5633,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xa5:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5639,7 +5652,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xac:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5647,7 +5660,7 @@ CPU_X86.prototype.exec = function(xa)
                                     if ((Ga >> 6) == 3)
                                     {
                                         Ka = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                         Hb++;
                                         ;
                                         Ha = Ga & 7;
@@ -5656,7 +5669,7 @@ CPU_X86.prototype.exec = function(xa)
                                     {
                                         ha = Mb(Ga);
                                         Ka = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                         Hb++;
                                         ;
                                         ia = ob();
@@ -5665,7 +5678,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xad:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5684,7 +5697,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xba:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5696,14 +5709,14 @@ CPU_X86.prototype.exec = function(xa)
                                             {
                                                 ia = za[Ga & 7];
                                                 Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-											: Ra[Hb ^ Ua];
+											: phys_mem8[Hb ^ Ua];
                                                 Hb++;
                                                 ;
                                             } else
                                             {
                                                 ha = Mb(Ga);
                                                 Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-											: Ra[Hb ^ Ua];
+											: phys_mem8[Hb ^ Ua];
                                                 Hb++;
                                                 ;
                                                 ia = ob();
@@ -5715,7 +5728,7 @@ CPU_X86.prototype.exec = function(xa)
                                             {
                                                 Ha = Ga & 7;
                                                 Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-											: Ra[Hb ^ Ua];
+											: phys_mem8[Hb ^ Ua];
                                                 Hb++;
                                                 ;
                                                 za[Ha] = pc(za[Ha], Ja);
@@ -5723,7 +5736,7 @@ CPU_X86.prototype.exec = function(xa)
                                             {
                                                 ha = Mb(Ga);
                                                 Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-											: Ra[Hb ^ Ua];
+											: phys_mem8[Hb ^ Ua];
                                                 Hb++;
                                                 ;
                                                 ia = ob();
@@ -5737,7 +5750,7 @@ CPU_X86.prototype.exec = function(xa)
                                             {
                                                 Ha = Ga & 7;
                                                 Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-											: Ra[Hb ^ Ua];
+											: phys_mem8[Hb ^ Ua];
                                                 Hb++;
                                                 ;
                                                 za[Ha] = qc(za[Ha], Ja);
@@ -5745,7 +5758,7 @@ CPU_X86.prototype.exec = function(xa)
                                             {
                                                 ha = Mb(Ga);
                                                 Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-											: Ra[Hb ^ Ua];
+											: phys_mem8[Hb ^ Ua];
                                                 Hb++;
                                                 ;
                                                 ia = ob();
@@ -5759,7 +5772,7 @@ CPU_X86.prototype.exec = function(xa)
                                             {
                                                 Ha = Ga & 7;
                                                 Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-											: Ra[Hb ^ Ua];
+											: phys_mem8[Hb ^ Ua];
                                                 Hb++;
                                                 ;
                                                 za[Ha] = rc(za[Ha], Ja);
@@ -5767,7 +5780,7 @@ CPU_X86.prototype.exec = function(xa)
                                             {
                                                 ha = Mb(Ga);
                                                 Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-											: Ra[Hb ^ Ua];
+											: phys_mem8[Hb ^ Ua];
                                                 Hb++;
                                                 ;
                                                 ia = ob();
@@ -5781,7 +5794,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xa3:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5798,7 +5811,7 @@ CPU_X86.prototype.exec = function(xa)
                                     oc(ia, Ja);
                                     break Ee;
                                 case 0xab:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5817,7 +5830,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xb3:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5836,7 +5849,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xbb:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5855,7 +5868,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xbc:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5871,7 +5884,7 @@ CPU_X86.prototype.exec = function(xa)
                                     za[Ia] = sc(za[Ia], Ja);
                                     break Ee;
                                 case 0xbd:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5887,7 +5900,7 @@ CPU_X86.prototype.exec = function(xa)
                                     za[Ia] = tc(za[Ia], Ja);
                                     break Ee;
                                 case 0xaf:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5914,7 +5927,7 @@ CPU_X86.prototype.exec = function(xa)
                                         break Ee;
                                     }
                                 case 0xc0:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5942,7 +5955,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xc1:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -5964,7 +5977,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0xb1:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6220,7 +6233,7 @@ CPU_X86.prototype.exec = function(xa)
                             {
                                 case 0x166:
                                     Fa |= 0x0100;
-                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6228,7 +6241,7 @@ CPU_X86.prototype.exec = function(xa)
                                     break;
                                 case 0x1f0:
                                     Fa |= 0x0040;
-                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6236,7 +6249,7 @@ CPU_X86.prototype.exec = function(xa)
                                     break;
                                 case 0x1f2:
                                     Fa |= 0x0020;
-                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6244,7 +6257,7 @@ CPU_X86.prototype.exec = function(xa)
                                     break;
                                 case 0x1f3:
                                     Fa |= 0x0010;
-                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6252,7 +6265,7 @@ CPU_X86.prototype.exec = function(xa)
                                     break;
                                 case 0x164:
                                     Fa = (Fa & ~0x000f) | (4 + 1);
-                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6261,7 +6274,7 @@ CPU_X86.prototype.exec = function(xa)
                                     break;
                                 case 0x165:
                                     Fa = (Fa & ~0x000f) | (5 + 1);
-                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6269,7 +6282,7 @@ CPU_X86.prototype.exec = function(xa)
                                     ;
                                     break;
                                 case 0x189:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6284,7 +6297,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0x18b:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6318,7 +6331,7 @@ CPU_X86.prototype.exec = function(xa)
                                     sb(za[0]);
                                     break Ee;
                                 case 0x1c7:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6346,7 +6359,7 @@ CPU_X86.prototype.exec = function(xa)
                                     Sb(Ia, ia);
                                     break Ee;
                                 case 0x187:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6372,7 +6385,7 @@ CPU_X86.prototype.exec = function(xa)
                                 case 0x129:
                                 case 0x131:
                                 case 0x139:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6405,7 +6418,7 @@ CPU_X86.prototype.exec = function(xa)
                                 case 0x12b:
                                 case 0x133:
                                 case 0x13b:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6434,7 +6447,7 @@ CPU_X86.prototype.exec = function(xa)
                                     Sb(0, ac(La, za[0], Ja));
                                     break Ee;
                                 case 0x181:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6461,7 +6474,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0x183:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6470,7 +6483,7 @@ CPU_X86.prototype.exec = function(xa)
                                     {
                                         Ha = Ga & 7;
                                         Ja = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua]) << 24) >> 24;
+										: phys_mem8[Hb ^ Ua]) << 24) >> 24;
                                         Hb++;
                                         ;
                                         Sb(Ha, ac(La, za[Ha], Ja));
@@ -6478,7 +6491,7 @@ CPU_X86.prototype.exec = function(xa)
                                     {
                                         ha = Mb(Ga);
                                         Ja = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua]) << 24) >> 24;
+										: phys_mem8[Hb ^ Ua]) << 24) >> 24;
                                         Hb++;
                                         ;
                                         if (La != 7)
@@ -6516,7 +6529,7 @@ CPU_X86.prototype.exec = function(xa)
                                     Sb(Ia, cc(za[Ia]));
                                     break Ee;
                                 case 0x16b:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6530,13 +6543,13 @@ CPU_X86.prototype.exec = function(xa)
                                         Ja = gb();
                                     }
                                     Ka = ((((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-									: Ra[Hb ^ Ua]) << 24) >> 24;
+									: phys_mem8[Hb ^ Ua]) << 24) >> 24;
                                     Hb++;
                                     ;
                                     Sb(Ia, Jc(Ja, Ka));
                                     break Ee;
                                 case 0x169:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6553,7 +6566,7 @@ CPU_X86.prototype.exec = function(xa)
                                     Sb(Ia, Jc(Ja, Ka));
                                     break Ee;
                                 case 0x185:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6575,7 +6588,7 @@ CPU_X86.prototype.exec = function(xa)
                                     Ca = 13;
                                     break Ee;
                                 case 0x1f7:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6674,7 +6687,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0x1c1:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6682,7 +6695,7 @@ CPU_X86.prototype.exec = function(xa)
                                     if ((Ga >> 6) == 3)
                                     {
                                         Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                         Hb++;
                                         ;
                                         Ha = Ga & 7;
@@ -6691,7 +6704,7 @@ CPU_X86.prototype.exec = function(xa)
                                     {
                                         ha = Mb(Ga);
                                         Ja = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                         Hb++;
                                         ;
                                         ia = mb();
@@ -6700,7 +6713,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0x1d1:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6718,7 +6731,7 @@ CPU_X86.prototype.exec = function(xa)
                                     }
                                     break Ee;
                                 case 0x1d3:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6743,7 +6756,7 @@ CPU_X86.prototype.exec = function(xa)
                                     Sb(2, (za[0] << 16) >> 31);
                                     break Ee;
                                 case 0x1ff:
-                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6951,7 +6964,7 @@ CPU_X86.prototype.exec = function(xa)
                                     ye = (cpu.eflags >> 12) & 3;
                                     if (cpu.cpl > ye)
                                         vc(13);
-                                    ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -6967,7 +6980,7 @@ CPU_X86.prototype.exec = function(xa)
                                     ye = (cpu.eflags >> 12) & 3;
                                     if (cpu.cpl > ye)
                                         vc(13);
-                                    ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    ia = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -7163,7 +7176,7 @@ CPU_X86.prototype.exec = function(xa)
                                 default:
                                     vc(6);
                                 case 0x10f:
-                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : Ra[Hb
+                                    b = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb
 									^ Ua];
                                     Hb++;
                                     ;
@@ -7187,7 +7200,7 @@ CPU_X86.prototype.exec = function(xa)
                                         case 0x14e:
                                         case 0x14f:
                                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                             Hb++;
                                             ;
                                             if ((Ga >> 6) == 3)
@@ -7203,7 +7216,7 @@ CPU_X86.prototype.exec = function(xa)
                                             break Ee;
                                         case 0x1b6:
                                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                             Hb++;
                                             ;
                                             Ia = (Ga >> 3) & 7;
@@ -7220,7 +7233,7 @@ CPU_X86.prototype.exec = function(xa)
                                             break Ee;
                                         case 0x1be:
                                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                             Hb++;
                                             ;
                                             Ia = (Ga >> 3) & 7;
@@ -7237,7 +7250,7 @@ CPU_X86.prototype.exec = function(xa)
                                             break Ee;
                                         case 0x1af:
                                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                             Hb++;
                                             ;
                                             Ia = (Ga >> 3) & 7;
@@ -7253,7 +7266,7 @@ CPU_X86.prototype.exec = function(xa)
                                             break Ee;
                                         case 0x1c1:
                                             Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: Ra[Hb ^ Ua];
+										: phys_mem8[Hb ^ Ua];
                                             Hb++;
                                             ;
                                             Ia = (Ga >> 3) & 7;
