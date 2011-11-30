@@ -9,11 +9,11 @@ permission.
 
 This PC emulator is written in Javascript. The emulated hardware consists in the following devices:
 
-    32 bit x86 compatible CPU
-    8259 Programmble Interrupt Controller
-    8254 Programmble Interrupt Timer  (PIT) 用于时钟计数
-    16450 UART(universal asynchronous receiver/transmitter)
-    Real Time Clock.    //Port 0x70 and 0x71
+32 bit x86 compatible CPU
+8259 Programmble Interrupt Controller
+8254 Programmble Interrupt Timer  (PIT) 用于时钟计数
+16450 UART(universal asynchronous receiver/transmitter)
+Real Time Clock.    //Port 0x70 and 0x71
     
 */
 "use strict";
@@ -35,7 +35,7 @@ var ca = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
 
 var da = [0, 1, 2, 3, 4, 5, 6, 7, 8,
           0, 1, 2, 3, 4, 5, 6, 7, 8,
-          0, 1, 2, 3, 4, 5, 6, 7, 8, 
+          0, 1, 2, 3, 4, 5, 6, 7, 8,
           0, 1, 2, 3, 4];
 
 function CPU_X86()
@@ -53,18 +53,22 @@ function CPU_X86()
     for (i = 0; i < 8; i++)
         this.regs[i] = 0;
 
-    this.eip = 0;   
+    this.eip = 0;
     //操作符,操作数,
     this.cc_op = 0;
     this.cc_dst = 0;
     this.cc_src = 0;
     this.cc_op2 = 0;
     this.cc_dst2 = 0;
-       
+
     this.df = 1;
     this.eflags = 0x2;
     this.cycle_count = 0;
     this.hard_irq = 0;
+
+    //当CPL是0时，此时所有特权级上的数据段都可被访问；
+    //当CPL是1时，只有在特权级1～3的数据段可被访问；
+    //当CPL是3时，只有处于特权级3的数据段可被访问。
     this.cpl = 0;
 
     //控制寄存器CR0的第0为是PE位,PE位为0时,CPU运行于实模式,为1时,CPU运行于保护模式.
@@ -73,13 +77,13 @@ function CPU_X86()
     this.cr2 = 0;         //页故障线性地址寄存器，保存最后一次出现页故障的全32位线性地址。
     this.cr3 = 0;         //高20位保存页面目录的基地址.页目录表总是放在以4K字节为单位的存储器边界上，因此，它的地址的低12位总为0，不起作用，即使写上内容，也不会被理会。
     this.cr4 = 0;
-    
+
     // Interrupt descriptor table
     this.idt = {
         base: 0,
         limit: 0
     };
-    
+
     //Local descriptor table
     //
     this.ldt = {
@@ -88,13 +92,13 @@ function CPU_X86()
         limit: 0,
         flags: 0
     };
-    
+
     // Global descriptor table 
     this.gdt = {
         base: 0,
         limit: 0
     };
-    
+
     this.segs = new Array();
     for (i = 0; i < 6; i++)
     {
@@ -111,16 +115,16 @@ function CPU_X86()
         limit: 0,
         flags: 0
     };
-    
+
     this.halted = 0;
     this.phys_mem = null;
-    
+
     size = 0x100000; //2^20
     this.tlb_read_kernel = new Int32Array(size);
     this.tlb_write_kernel = new Int32Array(size);
     this.tlb_read_user = new Int32Array(size);
     this.tlb_write_user = new Int32Array(size);
-    
+
     for (i = 0; i < size; i++)
     {
         this.tlb_read_kernel[i] = -1;
@@ -175,7 +179,7 @@ CPU_X86.prototype.tlb_set_page = function(ha, ja, ka, la)
     //把ja的低12位清0
     ja &= -4096;  // 4096= 2^12= 1000000000000  -4096=111111000000000000
     ha &= -4096;
-    
+
     //ja和ha按位异或
     ia = ha ^ ja;
     i = ha >>> 12;
@@ -188,16 +192,16 @@ CPU_X86.prototype.tlb_set_page = function(ha, ja, ka, la)
         this.tlb_pages[this.tlb_pages_count++] = i;
     }
     this.tlb_read_kernel[i] = ia;
-    
+
     if (ka)
     {
         this.tlb_write_kernel[i] = ia;
-    } 
+    }
     else
     {
         this.tlb_write_kernel[i] = -1;
     }
-    
+
     if (la)
     {
         this.tlb_read_user[i] = ia;
@@ -208,7 +212,7 @@ CPU_X86.prototype.tlb_set_page = function(ha, ja, ka, la)
         {
             this.tlb_write_user[i] = -1;
         }
-    } 
+    }
     else
     {
         this.tlb_read_user[i] = -1;
@@ -257,7 +261,7 @@ CPU_X86.prototype.tlb_flush_all1 = function(na)
         if (i == na)
         {
             ma[oa++] = i;
-        } 
+        }
         else
         {
             this.tlb_read_kernel[i] = -1;
@@ -360,9 +364,9 @@ CPU_X86.prototype.exec = function(xa)
     var Pa, Qa;
 
     var phys_mem8, phys_mem16, phys_mem32, Ua;
-    
+
     var tlb_read_kernel, tlb_write_kernel, tlb_read_user, tlb_write_user, Za, ab;
-    
+
     function bb()
     {
         var cb;
@@ -471,7 +475,6 @@ CPU_X86.prototype.exec = function(xa)
                 phys_mem8[ha ^ Ua] = ia;
             }
         }
-        ;
     }
     function rb(ia)
     {
@@ -2126,7 +2129,8 @@ CPU_X86.prototype.exec = function(xa)
         {
             Za = tlb_read_user;
             ab = tlb_write_user;
-        } else
+        }
+        else
         {
             Za = tlb_read_kernel;
             ab = tlb_write_kernel;
@@ -2490,8 +2494,10 @@ CPU_X86.prototype.exec = function(xa)
             Wd = 1;
             be = zd(Zd);
             Sd = Ed(Yd, Zd);
-        } else if ((Ad & (1 << 10)) || Jd == Ud)
+        } 
+        else if ((Ad & (1 << 10)) || Jd == Ud)
         {
+            //bit 21
             if (cpu.eflags & 0x00020000)
                 Zc(13, selector & 0xfffc);
             Wd = 0;
@@ -2944,22 +2950,27 @@ CPU_X86.prototype.exec = function(xa)
                 break;
         }
     }
-    
+
     //CPU exec
     cpu = this;
     phys_mem8 = this.phys_mem8;
     phys_mem16 = this.phys_mem16;
     phys_mem32 = this.phys_mem32;
-    
+
     tlb_read_user = this.tlb_read_user;
     tlb_write_user = this.tlb_write_user;
     tlb_read_kernel = this.tlb_read_kernel;
     tlb_write_kernel = this.tlb_write_kernel;
+
+    // 一个程序或任务可寻址的区域随着其CPL的改变而变化。
+    // 当CPL是0时，此时所有特权级上的数据段都可被访问；
+    // 当CPL是1时，只有在特权级1～3的数据段可被访问；
+    // 当CPL是3时，只有处于特权级3的数据段可被访问。
     if (cpu.cpl == 3)
     {
         Za = tlb_read_user;
         ab = tlb_write_user;
-    } 
+    }
     else
     {
         Za = tlb_read_kernel;
@@ -7249,10 +7260,9 @@ CPU_X86.prototype.exec = function(xa)
                                             Sb(Ia, (ia << 24) >> 24);
                                             break Ee;
                                         case 0x1af:
-                                            Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: phys_mem8[Hb ^ Ua];
+                                            Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb) : phys_mem8[Hb ^ Ua];
                                             Hb++;
-                                            ;
+                                      
                                             Ia = (Ga >> 3) & 7;
                                             if ((Ga >> 6) == 3)
                                             {
@@ -7265,10 +7275,9 @@ CPU_X86.prototype.exec = function(xa)
                                             Sb(Ia, Jc(za[Ia], Ja));
                                             break Ee;
                                         case 0x1c1:
-                                            Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb)
-										: phys_mem8[Hb ^ Ua];
+                                            Ga = ((Ua = Za[Hb >>> 12]) == -1) ? Jb(Hb): phys_mem8[Hb ^ Ua];
                                             Hb++;
-                                            ;
+                                          
                                             Ia = (Ga >> 3) & 7;
                                             if ((Ga >> 6) == 3)
                                             {
@@ -7543,7 +7552,7 @@ CPU_X86.prototype.load_binary = function(url, memAddress)
     {
         fileContent = xhr.responseText;
     }
-    
+
     fileLength = fileContent.byteLength;
     bytesArray = new Uint8Array(fileContent, 0, fileLength);
     for (i = 0; i < fileLength; i++)
@@ -7598,7 +7607,7 @@ Pe.prototype.ioport_read = function(ha)
     if (ha == 0x70)
     {
         return 0xff;
-    } 
+    }
     else
     {
         He = this.cmos_data[this.cmos_index];
@@ -7669,7 +7678,7 @@ Se.prototype.get_irq = function()
     if (Xe > Ye)
     {
         return Xe;
-    } 
+    }
     else
     {
         return -1;
@@ -7681,7 +7690,7 @@ Se.prototype.intack = function(Ue)
     {
         if (this.rotate_on_auto_eoi)
             this.priority_add = (Ue + 1) & 7;
-    } 
+    }
     else
     {
         this.isr |= (1 << Ue);
@@ -7705,14 +7714,14 @@ Se.prototype.ioport_write = function(ha, ia)
                 throw "single mode not supported";
             if (ia & 0x08)
                 throw "level sensitive irq not supported";
-        } 
+        }
         else if (ia & 0x08)
         {
             if (ia & 0x02)
                 this.read_reg_select = ia & 1;
             if (ia & 0x40)
                 this.special_mask = (ia >> 5) & 1;
-        } 
+        }
         else
         {
             switch (ia)
@@ -7766,7 +7775,7 @@ Se.prototype.ioport_write = function(ha, ia)
                     break;
             }
         }
-    } 
+    }
     else
     {
         switch (this.init_state)
@@ -7896,10 +7905,10 @@ function ff(Qe, gf)
     }
     this.speaker_data_on = 0;
     this.set_irq = gf;
-    
+
     Qe.register_ioport_write(0x40, 4, 1, this.ioport_write.bind(this));
     Qe.register_ioport_read(0x40, 3, 1, this.ioport_read.bind(this));
-    
+
     Qe.register_ioport_read(0x61, 1, 1, this.speaker_ioport_read.bind(this));
     Qe.register_ioport_write(0x61, 1, 1, this.speaker_ioport_write.bind(this));
 }
@@ -8135,11 +8144,11 @@ pf.prototype.update_irq = function()
     if ((this.lsr & 0x01) && (this.ier & 0x01))
     {
         this.iir = 0x04;
-    } 
+    }
     else if ((this.lsr & 0x20) && (this.ier & 0x02))
     {
         this.iir = 0x02;
-    } 
+    }
     else
     {
         this.iir = 0x01;
@@ -8147,7 +8156,7 @@ pf.prototype.update_irq = function()
     if (this.iir != 0x01)
     {
         this.set_irq_func(1);
-    } 
+    }
     else
     {
         this.set_irq_func(0);
@@ -8164,7 +8173,7 @@ pf.prototype.ioport_write = function(ha, ia)
             if (this.lcr & 0x80)
             {
                 this.divider = (this.divider & 0xff00) | ia;
-            } 
+            }
             else
             {
                 this.lsr &= ~0x20;
@@ -8179,7 +8188,7 @@ pf.prototype.ioport_write = function(ha, ia)
             if (this.lcr & 0x80)
             {
                 this.divider = (this.divider & 0x00ff) | (ia << 8);
-            } 
+            }
             else
             {
                 this.ier = ia;
@@ -8416,7 +8425,7 @@ xf.prototype.init_ioports = function()
     //long
     this.ioport_readl_table = new Array();
     this.ioport_writel_table = new Array();
-    
+
     for (i = 0; i < 1024; i++)
     {
         this.ioport_readb_table[i] = this.default_ioport_readb;
@@ -8605,7 +8614,7 @@ function emulator_timer_func()
         if (Gf)
         {
             setTimeout(emulator_timer_func, 10);
-        } 
+        }
         else
         {
             setTimeout(emulator_timer_func, 0);
@@ -8669,7 +8678,7 @@ function start()
     cpu.st16_port = Qe.st16_port.bind(Qe);
     //
     cpu.st32_port = Qe.st32_port.bind(Qe);
-    
+
     cpu.get_hard_intno = Qe.pic.get_hard_intno.bind(Qe.pic);
     Bf = Date.now();
     setTimeout(emulator_timer_func, 10);      //Start the pc emulater
